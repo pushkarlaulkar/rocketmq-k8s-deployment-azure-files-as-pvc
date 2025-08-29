@@ -48,7 +48,7 @@ If there is an Azure Firewall in your environment through which all outbound acc
      }
    }
    ```
-   Assign below role assignment
+   Assign below role assignment and redeploy the deployment
 
    ```
    az role assignment create \
