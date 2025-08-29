@@ -1,0 +1,201 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-config
+  namespace: your-namespace
+data:
+  broker.conf: |
+    brokerClusterName = DefaultCluster
+    brokerName = broker-a
+    brokerId = 0
+    deleteWhen = 04
+    fileReservedTime = 48
+    brokerRole = ASYNC_MASTER
+    flushDiskType = ASYNC_FLUSH
+    namesrvAddr = rmqnamesrv:9876
+    brokerIP1 = rmqbroker
+    listenPort = 10911
+    autoCreateTopicEnable = true
+    brokerPermission = 6
+    enableProxy = true
+    aclEnable=false
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rmqnamesrv
+  namespace: your-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rmqnamesrv
+  template:
+    metadata:
+      labels:
+        app: rmqnamesrv
+    spec:
+      imagePullSecrets:
+      - name: azure-container-registry
+      containers:
+      - name: namesrv
+        image: apache/rocketmq:5.3.2
+        command: ["sh", "mqnamesrv"]
+        ports:
+        - containerPort: 9876
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rmqnamesrv
+  namespace: your-namespace
+spec:
+  selector:
+    app: rmqnamesrv
+  ports:
+  - name: namesrv
+    port: 9876
+    targetPort: 9876
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rmqbroker
+  namespace: your-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rmqbroker
+  template:
+    metadata:
+      labels:
+        app: rmqbroker
+    spec:
+      imagePullSecrets:
+      - name: azure-container-registry
+      initContainers:
+        - name: init-broker-dirs
+          image: busybox 
+          command:
+             - sh
+             - -c
+             - |
+               mkdir -p /home/rocketmq/store \
+                        /home/rocketmq/rocketmq-5.3.2/logs \
+                        /home/rocketmq/rocketmq-5.3.2/schedule \
+               && chown -R 3000:3000 /home/rocketmq/store \
+               && chown -R 3000:3000 /home/rocketmq/rocketmq-5.3.2/logs \
+               && chown -R 3000:3000 /home/rocketmq/rocketmq-5.3.2/schedule
+          volumeMounts:
+            - name: broker-storage
+              mountPath: /home/rocketmq/store
+            - name: broker-configmap
+              mountPath: /home/rocketmq/rocketmq-5.3.2/conf
+      containers:
+      - name: broker
+        image: apache/rocketmq:5.3.2
+        command: ["sh", "mqbroker", "-c", "/home/rocketmq/rocketmq-5.3.2/conf/broker.conf"]
+        #command: ["sleep", "3600"]
+        ports:
+          - containerPort: 10909
+          - containerPort: 10911
+          - containerPort: 10912
+        env:
+          - name: NAMESRV_ADDR
+            value: "rmqnamesrv:9876"
+        volumeMounts:
+          - name: broker-configmap
+            mountPath: /home/rocketmq/rocketmq-5.3.2/conf
+          - name: broker-storage
+            mountPath: /home/rocketmq/store   # same path as in Docker
+      volumes:
+        - name: broker-configmap
+          configMap:
+            name: broker-config
+        - name: broker-storage
+          persistentVolumeClaim:
+            claimName: rocketmq-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rmqbroker
+  namespace: your-namespace
+spec:
+  selector:
+    app: rmqbroker
+  ports:
+  - name: broker-listen
+    port: 10909
+    targetPort: 10909
+  - name: broker-main
+    port: 10911
+    targetPort: 10911
+  - name: broker-ha
+    port: 10912
+    targetPort: 10912
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rmqconsole
+  namespace: your-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rmqconsole
+  template:
+    metadata:
+      labels:
+        app: rmqconsole
+    spec:
+      imagePullSecrets:
+      - name: azure-container-registry
+      containers:
+      - name: console
+        image: apacherocketmq/rocketmq-dashboard:2.0.1
+        ports:
+        - containerPort: 8080
+        env:
+        - name: JAVA_OPTS
+          value: "-Drocketmq.namesrv.addr=rmqnamesrv:9876 -Dcom.rocketmq.sendMessageWithVIPChannel=false"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rmqconsole
+  namespace: your-namespace
+spec:
+  type: ClusterIP 
+  selector:
+    app: rmqconsole
+  ports:
+  - name: console-web
+    port: 8080
+    targetPort: 8080
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: rmqconsole
+  namespace: your-namespace
+spec:
+  entryPoints:
+  - your-namespace-webpriv
+  routes:
+  - kind: Rule
+    match: Host(`rocketmq-hostname`) && PathPrefix(`/`)
+    services:
+    - name: rmqconsole
+      namespace: your-namespace
+      port: 8080
