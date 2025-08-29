@@ -37,17 +37,16 @@ If there is an Azure Firewall in your environment through which all outbound acc
 
    ```
      Warning  FailedMount  8s (x6 over 27s)  kubelet            MountVolume.MountDevice failed for volume "rocketmq-pv" : rpc error: code = InvalidArgument desc = GetAccountInfo(resource-group-name#storage-account-name#share-name) failed with error: POST https://management.azure.com/subscriptions/subscription-id/resourceGroups/resource-group-name/providers/Microsoft.Storage/storageAccounts/storage-account-name/listKeys
---------------------------------------------------------------------------------
-RESPONSE 403: 403 Forbidden
-ERROR CODE: AuthorizationFailed
---------------------------------------------------------------------------------
-{
-  "error": {
-    "code": "AuthorizationFailed",
-    "message": "The client 'client-id' with object id 'client-id' does not have authorization to perform action 'Microsoft.Storage/storageAccounts/listKeys/action' over scope '/subscriptions/subscription-id/resourceGroups/resource-group-name/providers/Microsoft.Storage/storageAccounts/storage-account-name' or the scope is invalid. If access was recently granted, please refresh your credentials."
-  }
-}
---------------------------------------------------------------------------------
+
+   RESPONSE 403: 403 Forbidden
+   ERROR CODE: AuthorizationFailed
+   
+   {
+     "error": {
+       "code": "AuthorizationFailed",
+       "message": "The client 'client-id' with object id 'client-id' does not have authorization to perform action 'Microsoft.Storage/storageAccounts/listKeys/action' over scope '/subscriptions/subscription-id/resourceGroups/resource-group-name/providers/Microsoft.Storage/storageAccounts/storage-account-name' or the scope is invalid. If access was recently granted, please refresh your credentials."
+     }
+   }
    ```
    Assign below role assignment
 
