@@ -1,0 +1,103 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broker-b-config
+  namespace: your-namespace
+data:
+  broker.conf: |
+    brokerClusterName = DefaultCluster
+    brokerName = broker-b
+    brokerId = 0
+    deleteWhen = 04
+    fileReservedTime = 48
+    brokerRole = ASYNC_MASTER
+    flushDiskType = ASYNC_FLUSH
+    namesrvAddr = rmqnamesrv:9876
+    brokerIP1 = rmqbroker-b
+    listenPort = 10911
+    autoCreateTopicEnable = true
+    brokerPermission = 6
+    enableProxy = true
+    aclEnable=false
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rmqbroker-b
+  namespace: your-namespace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rmqbroker-b
+  template:
+    metadata:
+      labels:
+        app: rmqbroker-b
+    spec:
+      imagePullSecrets:
+      - name: azure-container-registry
+      initContainers:
+        - name: init-broker-dirs
+          image: busybox 
+          command:
+             - sh
+             - -c
+             - |
+               mkdir -p /home/rocketmq/store \
+                        /home/rocketmq/rocketmq-5.3.2/logs \
+                        /home/rocketmq/rocketmq-5.3.2/schedule \
+               && chown -R 3000:3000 /home/rocketmq/store \
+               && chown -R 3000:3000 /home/rocketmq/rocketmq-5.3.2/logs \
+               && chown -R 3000:3000 /home/rocketmq/rocketmq-5.3.2/schedule
+          volumeMounts:
+            - name: broker-storage
+              mountPath: /home/rocketmq/store
+            - name: broker-configmap
+              mountPath: /home/rocketmq/rocketmq-5.3.2/conf
+      containers:
+      - name: broker
+        image: apache/rocketmq:5.3.2
+        command: ["sh", "mqbroker", "-c", "/home/rocketmq/rocketmq-5.3.2/conf/broker.conf"]
+        #command: ["sleep", "3600"]
+        ports:
+          - containerPort: 10909
+          - containerPort: 10911
+          - containerPort: 10912
+        env:
+          - name: NAMESRV_ADDR
+            value: "rmqnamesrv:9876"
+        volumeMounts:
+          - name: broker-configmap
+            mountPath: /home/rocketmq/rocketmq-5.3.2/conf
+          - name: broker-storage
+            mountPath: /home/rocketmq/store   # same path as in Docker
+      volumes:
+        - name: broker-configmap
+          configMap:
+            name: broker-b-config
+        - name: broker-storage
+          persistentVolumeClaim:
+            claimName: rocketmq-pvc-b
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rmqbroker-b
+  namespace: your-namespace
+spec:
+  selector:
+    app: rmqbroker-b
+  ports:
+  - name: broker-listen
+    port: 10909
+    targetPort: 10909
+  - name: broker-main
+    port: 10911
+    targetPort: 10911
+  - name: broker-ha
+    port: 10912
+    targetPort: 10912
