@@ -56,3 +56,4 @@ If there is an Azure Firewall in your environment through which all outbound acc
    --role "Storage Account Contributor" \
    --scope /subscriptions/subscription-id/resourceGroups/resource-group-name
    ```
+7. If there is a need to add more brokers to the same cluster and nameserver, add respective PV & PVC with their own Azure File. Also create a new CM, Deployment & Service for new brokers.
