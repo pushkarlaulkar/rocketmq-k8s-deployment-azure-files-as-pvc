@@ -20,6 +20,12 @@ data:
     brokerPermission = 6
     enableProxy = true
     aclEnable=false
+    storePathRootDir=/home/rocketmq/store
+    storePathCommitLog=/home/rocketmq/store/commitlog
+    storePathConsumeQueue=/home/rocketmq/store/consumequeue
+    storePathIndex=/home/rocketmq/store/index
+    storeCheckpoint=/home/rocketmq/store/checkpoint
+    abortFile=/home/rocketmq/store/abort
 
 ---
 apiVersion: apps/v1
